@@ -7,105 +7,84 @@
 
 <style>
 *{box-sizing:border-box}
-
 body{
-  margin:0;
-  background:#07162f;
-  color:#fff;
-  font-family:-apple-system,system-ui,sans-serif;
+  margin:0;background:#07162f;color:#fff;
+  font-family:-apple-system,system-ui,sans-serif
 }
-
-main{
-  max-width:540px;
-  margin:auto;
-  padding:18px;
-}
-
+main{max-width:540px;margin:auto;padding:18px}
 h1{margin:4px 0}
-
 .muted{opacity:.7}
 
 .grid{
   display:grid;
   grid-template-columns:repeat(4,1fr);
-  gap:8px;
-  margin:16px 0;
+  gap:8px;margin:16px 0
 }
 
 .t{
-  background:#f3f0e8;
-  color:#111;
-  border-radius:14px;
-  padding:7px;
-  text-align:center;
+  background:#f3f0e8;color:#111;
+  border-radius:14px;padding:7px;text-align:center
 }
 
-.t.refill{
-  background:#ffe08a;
-}
+.t.refill{background:#ffe08a}
 
 .l{
-  width:100%;
-  border:0;
-  background:transparent;
-  text-align:center;
-  font-size:34px;
-  font-weight:850;
-  text-transform:uppercase;
-  outline:0;
+  width:100%;border:0;background:transparent;
+  text-align:center;font-size:34px;font-weight:850;
+  text-transform:uppercase;outline:0
 }
 
 .p{
-  width:38px;
-  border:0;
-  border-bottom:1px solid #777;
-  background:transparent;
-  text-align:center;
+  width:38px;border:0;border-bottom:1px solid #777;
+  background:transparent;text-align:center
 }
 
 button,label.btn{
-  border:0;
-  border-radius:12px;
-  padding:12px 14px;
-  margin:3px;
-  font-weight:800;
-  font-size:15px;
-  background:#193d70;
-  color:white;
-  display:inline-block;
+  border:0;border-radius:12px;padding:12px 14px;
+  margin:3px;font-weight:800;font-size:15px;
+  background:#193d70;color:white;display:inline-block
 }
 
 .green{
   background:#20d48a!important;
-  color:#032014!important;
+  color:#032014!important
+}
+
+.camera{
+  background:#7c4dff!important
 }
 
 .panel{
-  background:#0d2548;
-  border-radius:13px;
-  padding:13px;
-  margin:13px 0;
+  background:#0d2548;border-radius:13px;
+  padding:13px;margin:13px 0
 }
 
 .word{
-  display:flex;
-  justify-content:space-between;
-  gap:8px;
-  padding:12px 10px;
+  display:flex;justify-content:space-between;
+  gap:8px;padding:12px 10px;
   border-bottom:1px solid #294466;
-  cursor:pointer;
+  cursor:pointer
 }
 
-.path{
-  font-size:11px;
-  opacity:.65;
-}
+.path{font-size:11px;opacity:.65}
 
 input[type=file]{display:none}
 
 #results{
   max-height:48vh;
-  overflow-y:auto;
+  overflow-y:auto
+}
+
+#preview{
+  display:none;
+  width:100%;
+  margin-top:10px;
+  border-radius:12px
+}
+
+#progress{
+  font-weight:800;
+  margin-top:8px
 }
 </style>
 </head>
@@ -117,23 +96,31 @@ input[type=file]{display:none}
 <h1>⚡ Rapid Word Link</h1>
 
 <div class="muted">
-Enter the starting board once. After playing a word,
-only enter the replacement letters.
+Import a Word Link screenshot or enter the board manually.
 </div>
 
 <div id="grid" class="grid"></div>
+
+<label class="btn camera">
+📸 IMPORT SCREENSHOT
+<input id="screenFile"
+       type="file"
+       accept="image/*">
+</label>
 
 <button class="green" onclick="solve()">
 SOLVE
 </button>
 
-<button onclick="resetSample()">
-RESET
+<button onclick="resetBoard()">
+CLEAR
 </button>
 
 <label class="btn">
 IMPORT WORD LIST
-<input id="file" type="file" accept=".txt,text/plain">
+<input id="dictFile"
+       type="file"
+       accept=".txt,text/plain">
 </label>
 
 <div class="panel">
@@ -142,13 +129,25 @@ IMPORT WORD LIST
 <span class="muted" id="status">
 Ready.
 </span>
+
+<div id="progress"></div>
+
+<img id="preview">
 </div>
 
 <div id="chosen"></div>
-
 <div id="results"></div>
 
+<canvas id="canvas" style="display:none"></canvas>
+
+<!-- OCR library -->
+<script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
+
 <script>
+
+/* ===============================
+   DICTIONARY
+================================ */
 
 let dict=[
 "den","dew","don","done","down","due","duet","dune",
@@ -164,462 +163,641 @@ let dict=[
 ];
 
 let total=0;
-
 let refillTiles=[];
 
-const sample=[
-['V',4],['N',1],['O',2],['D',2],
-['T',1],['Y',3],['O',2],['W',3],
-['N',1],['U',2],['O',2],['T',1],
-['E',1],['W',3],['E',1],['R',1]
-];
 
+/* ===============================
+   CREATE EMPTY BOARD
+================================ */
 
-/* -------------------------
-   CREATE BOARD
-------------------------- */
+function render(){
 
-function render(data=sample){
+ const g=document.getElementById("grid");
 
-  const g=document.getElementById('grid');
+ g.innerHTML="";
 
-  g.innerHTML='';
+ for(let i=0;i<16;i++){
 
-  data.forEach((x,i)=>{
+   const d=document.createElement("div");
 
-    const d=document.createElement('div');
+   d.className="t";
+   d.id="tile"+i;
 
-    d.className='t';
+   d.innerHTML=`
 
-    d.id='tile'+i;
+   <input
+   class="l"
+   id="l${i}"
+   maxlength="1"
+   autocomplete="off"
+   autocorrect="off"
+   autocapitalize="characters">
 
-    d.innerHTML=`
-      <input
-        class="l"
-        id="l${i}"
-        maxlength="1"
-        value="${x[0]}"
-        autocomplete="off"
-        autocorrect="off"
-        autocapitalize="characters"
-      >
+   <div>
+   pts
+   <input
+   class="p"
+   id="p${i}"
+   type="number"
+   min="0"
+   max="20"
+   value="1">
+   </div>
 
-      <div>
-        pts
-        <input
-          class="p"
-          id="p${i}"
-          type="number"
-          min="0"
-          max="20"
-          value="${x[1]}"
-        >
-      </div>
-    `;
+   `;
 
-    g.appendChild(d);
+   g.appendChild(d);
 
-  });
+ }
 
-  setupInputs();
+ setupInputs();
 }
 
 
-/* -------------------------
-   FAST REFILL INPUT
-------------------------- */
+/* ===============================
+   RAPID REFILL
+================================ */
 
 function setupInputs(){
 
-  for(let i=0;i<16;i++){
+ for(let i=0;i<16;i++){
 
-    const input=document.getElementById('l'+i);
+   const input=document.getElementById("l"+i);
 
-    input.addEventListener('input',()=>{
+   input.addEventListener("input",()=>{
 
-      input.value=input.value
-        .replace(/[^a-zA-Z]/g,'')
-        .toUpperCase()
-        .slice(-1);
+     input.value=input.value
+       .replace(/[^a-zA-Z]/g,"")
+       .toUpperCase()
+       .slice(-1);
 
-      if(!refillTiles.length) return;
+     if(!refillTiles.length) return;
 
-      const position=refillTiles.indexOf(i);
+     const position=refillTiles.indexOf(i);
 
-      if(position===-1) return;
+     if(position===-1) return;
 
-      if(input.value){
+     if(input.value){
 
-        const next=refillTiles[position+1];
+       const next=refillTiles[position+1];
 
-        if(next!==undefined){
+       if(next!==undefined){
 
-          document
-            .getElementById('l'+next)
-            .focus();
+         document.getElementById("l"+next).focus();
 
-        }else{
+       }else{
 
-          finishRefill();
+         finishRefill();
 
-        }
+       }
 
-      }
+     }
 
-    });
+   });
 
-  }
+ }
 
 }
 
 
-/* -------------------------
-   READ BOARD
-------------------------- */
+/* ===============================
+   SCREENSHOT IMPORT
+================================ */
+
+document.getElementById("screenFile").onchange=e=>{
+
+ const file=e.target.files[0];
+
+ if(!file) return;
+
+ const reader=new FileReader();
+
+ reader.onload=()=>{
+
+   const img=new Image();
+
+   img.onload=()=>readScreenshot(img);
+
+   img.src=reader.result;
+
+   document.getElementById("preview").src=reader.result;
+
+ };
+
+ reader.readAsDataURL(file);
+
+};
+
+
+/* ===============================
+   OCR SCREENSHOT
+================================ */
+
+async function readScreenshot(img){
+
+ const status=document.getElementById("status");
+ const progress=document.getElementById("progress");
+
+ status.textContent="Reading screenshot…";
+
+ progress.textContent="Locating 4×4 board…";
+
+ /*
+   These coordinates are based on the
+   Word Link screenshot layout you sent.
+
+   Coordinates are percentages so different
+   iPhone screenshot resolutions still work.
+ */
+
+ const boardLeft=.095;
+ const boardTop=.365;
+
+ const boardWidth=.81;
+ const boardHeight=.382;
+
+ const cellW=boardWidth/4;
+ const cellH=boardHeight/4;
+
+ const canvas=document.getElementById("canvas");
+
+ const ctx=canvas.getContext("2d");
+
+ /*
+   OCR only the central letter area of each tile.
+   This avoids the score dots.
+ */
+
+ for(let row=0;row<4;row++){
+
+   for(let col=0;col<4;col++){
+
+     const index=row*4+col;
+
+     progress.textContent=
+       `Reading tile ${index+1} of 16…`;
+
+     let x=
+       (boardLeft + col*cellW + cellW*.20)
+       * img.width;
+
+     let y=
+       (boardTop + row*cellH + cellH*.12)
+       * img.height;
+
+     let w=
+       cellW*.60*img.width;
+
+     let h=
+       cellH*.55*img.height;
+
+     canvas.width=Math.round(w*3);
+     canvas.height=Math.round(h*3);
+
+     ctx.clearRect(
+       0,0,
+       canvas.width,
+       canvas.height
+     );
+
+     ctx.drawImage(
+       img,
+       x,y,w,h,
+       0,0,
+       canvas.width,
+       canvas.height
+     );
+
+     /*
+       Convert crop to high-contrast grayscale.
+     */
+
+     const imageData=ctx.getImageData(
+       0,0,
+       canvas.width,
+       canvas.height
+     );
+
+     const data=imageData.data;
+
+     for(let p=0;p<data.length;p+=4){
+
+       const gray=
+         .299*data[p]+
+         .587*data[p+1]+
+         .114*data[p+2];
+
+       const v=gray<130 ? 0 : 255;
+
+       data[p]=v;
+       data[p+1]=v;
+       data[p+2]=v;
+
+     }
+
+     ctx.putImageData(imageData,0,0);
+
+     try{
+
+       const result=
+       await Tesseract.recognize(
+         canvas,
+         "eng",
+         {
+           logger:()=>{}
+         }
+       );
+
+       let text=result.data.text
+         .toUpperCase()
+         .replace(/[^A-Z]/g,"");
+
+       if(text){
+
+         document.getElementById(
+           "l"+index
+         ).value=text[0];
+
+       }
+
+     }catch(err){
+
+       console.error(err);
+
+     }
+
+   }
+
+ }
+
+ progress.textContent="";
+
+ const letters=[];
+
+ for(let i=0;i<16;i++){
+
+   letters.push(
+     document.getElementById("l"+i).value
+   );
+
+ }
+
+ const missing=
+ letters.filter(x=>!x).length;
+
+ if(missing){
+
+   status.textContent=
+   `Screenshot read. ${missing} tile(s) need correction.`;
+
+ }else{
+
+   status.textContent=
+   "Board detected! Solving…";
+
+   setTimeout(solve,100);
+
+ }
+
+}
+
+
+/* ===============================
+   READ CURRENT BOARD
+================================ */
 
 function board(){
 
-  let L=[];
-  let P=[];
+ let L=[];
+ let P=[];
 
-  for(let i=0;i<16;i++){
+ for(let i=0;i<16;i++){
 
-    L.push(
-      (document.getElementById('l'+i).value||'')
-      .toLowerCase()
-    );
+   L.push(
+     (document.getElementById("l"+i).value||"")
+     .toLowerCase()
+   );
 
-    P.push(
-      +document.getElementById('p'+i).value||0
-    );
+   P.push(
+     +document.getElementById("p"+i).value||0
+   );
 
-  }
+ }
 
-  return [L,P];
+ return [L,P];
 }
 
 
-/* -------------------------
+/* ===============================
    SOLVER
-------------------------- */
+================================ */
 
 function solve(){
 
-  let [L,P]=board();
+ let [L,P]=board();
 
-  if(L.some(x=>!x)){
+ if(L.some(x=>!x)){
 
-    document.getElementById('status').textContent=
-    "Fill all highlighted tiles first.";
+   document.getElementById("status").textContent=
+   "Some letters are missing. Correct them first.";
 
-    return;
+   return;
 
-  }
+ }
 
-  let ws=[
-    ...new Set(
-      dict
-      .map(x=>x.toLowerCase().trim())
-      .filter(x=>/^[a-z]{3,16}$/.test(x))
-    )
-  ];
+ const ws=[
+   ...new Set(
+     dict
+     .map(x=>x.toLowerCase().trim())
+     .filter(x=>/^[a-z]{3,16}$/.test(x))
+   )
+ ];
 
-  let W=new Set(ws);
+ const W=new Set(ws);
 
-  let pre=new Set();
+ const pre=new Set();
 
-  ws.forEach(w=>{
+ ws.forEach(w=>{
 
-    for(let n=1;n<=w.length;n++){
+   for(let n=1;n<=w.length;n++){
 
-      pre.add(w.slice(0,n));
+     pre.add(w.slice(0,n));
 
-    }
+   }
 
-  });
+ });
 
-  let F=new Map();
-
-
-  function dfs(i,s,path,score){
-
-    s+=L[i];
-
-    if(!pre.has(s)) return;
-
-    path=path.concat(i);
-
-    score+=P[i];
-
-    if(
-      W.has(s) &&
-      (!F.has(s) || F.get(s).score<score)
-    ){
-
-      F.set(s,{
-        score,
-        path
-      });
-
-    }
-
-    let r=(i/4)|0;
-    let c=i%4;
-
-    for(let dr=-1;dr<=1;dr++){
-
-      for(let dc=-1;dc<=1;dc++){
-
-        if(!dr&&!dc) continue;
-
-        let rr=r+dr;
-        let cc=c+dc;
-
-        if(
-          rr<0||rr>3||
-          cc<0||cc>3
-        ) continue;
-
-        let j=rr*4+cc;
-
-        if(!path.includes(j)){
-
-          dfs(
-            j,
-            s,
-            path,
-            score
-          );
-
-        }
-
-      }
-
-    }
-
-  }
+ const F=new Map();
 
 
-  for(let i=0;i<16;i++){
+ function dfs(i,s,path,score){
 
-    dfs(i,'',[],0);
+   s+=L[i];
 
-  }
+   if(!pre.has(s)) return;
 
+   path=path.concat(i);
 
-  let a=[...F]
+   score+=P[i];
 
-  .map(([word,v])=>({
-    word,
-    ...v
-  }))
+   if(
+     W.has(s) &&
+     (!F.has(s)||F.get(s).score<score)
+   ){
 
-  .sort((a,b)=>
-    b.score-a.score ||
-    b.word.length-a.word.length
-  );
+     F.set(s,{
+       score,
+       path
+     });
 
+   }
 
-  const R=document.getElementById('results');
+   const r=(i/4)|0;
+   const c=i%4;
 
-  R.innerHTML=`
-    <div class="panel">
-      <b>${a.length} words found</b>
-      <div class="muted">
-        Tap the word you actually play.
-      </div>
-    </div>
-  `;
+   for(let dr=-1;dr<=1;dr++){
 
+     for(let dc=-1;dc<=1;dc++){
 
-  a.forEach(x=>{
+       if(!dr&&!dc) continue;
 
-    const d=document.createElement('div');
+       const rr=r+dr;
+       const cc=c+dc;
 
-    d.className='word';
+       if(
+         rr<0||rr>3||
+         cc<0||cc>3
+       ) continue;
 
-    d.innerHTML=`
-      <span>
-        <b>${x.word.toUpperCase()}</b>
+       const j=rr*4+cc;
 
-        <div class="path">
+       if(!path.includes(j)){
 
-        ${x.path.map(i=>
-          `R${((i/4)|0)+1}C${i%4+1}`
-        ).join(' → ')}
+         dfs(j,s,path,score);
 
-        </div>
-      </span>
+       }
 
-      <b>${x.score} pts</b>
-    `;
+     }
 
-    d.onclick=()=>choose(x);
+   }
 
-    R.appendChild(d);
-
-  });
+ }
 
 
-  document.getElementById('status').textContent=
-  `${a.length} possible words.`;
+ for(let i=0;i<16;i++){
+
+   dfs(i,"",[],0);
+
+ }
+
+
+ const results=[...F]
+
+ .map(([word,v])=>({
+   word,
+   ...v
+ }))
+
+ .sort((a,b)=>
+   b.score-a.score ||
+   b.word.length-a.word.length
+ );
+
+
+ const R=document.getElementById("results");
+
+ R.innerHTML=`
+
+ <div class="panel">
+
+ <b>${results.length} words found</b>
+
+ <div class="muted">
+ Tap the word you actually play.
+ </div>
+
+ </div>
+
+ `;
+
+
+ results.forEach(x=>{
+
+   const d=document.createElement("div");
+
+   d.className="word";
+
+   d.innerHTML=`
+
+   <span>
+
+   <b>${x.word.toUpperCase()}</b>
+
+   <div class="path">
+
+   ${x.path.map(i=>
+     `R${((i/4)|0)+1}C${i%4+1}`
+   ).join(" → ")}
+
+   </div>
+
+   </span>
+
+   <b>${x.score} pts</b>
+
+   `;
+
+   d.onclick=()=>choose(x);
+
+   R.appendChild(d);
+
+ });
+
+
+ document.getElementById("status").textContent=
+ `${results.length} possible words.`;
 
 }
 
 
-/* -------------------------
+/* ===============================
    WORD PLAYED
-------------------------- */
+================================ */
 
 function choose(x){
 
-  total+=x.score;
+ total+=x.score;
 
-  document.getElementById('total').textContent=
-  total;
+ document.getElementById("total").textContent=
+ total;
 
+ refillTiles=[...x.path];
 
-  refillTiles=[...x.path];
-
-
-  document.getElementById('results').innerHTML='';
+ document.getElementById("results").innerHTML="";
 
 
-  refillTiles.forEach(i=>{
+ refillTiles.forEach(i=>{
 
-    const input=
-    document.getElementById('l'+i);
+   document.getElementById("l"+i).value="";
 
-    input.value='';
+   document.getElementById("tile"+i)
+   .classList.add("refill");
 
-    document
-    .getElementById('tile'+i)
-    .classList.add('refill');
-
-  });
+ });
 
 
-  document.getElementById('chosen').innerHTML=`
+ document.getElementById("chosen").innerHTML=`
 
-  <div class="panel">
+ <div class="panel">
 
-  <b>
-  Played ${x.word.toUpperCase()}
-  (+${x.score})
-  </b>
+ <b>
+ Played ${x.word.toUpperCase()}
+ (+${x.score})
+ </b>
 
-  <div class="muted">
+ <div class="muted">
 
-  Type ONLY the ${refillTiles.length}
-  replacement letters.
+ Enter ONLY the
+ ${refillTiles.length}
+ replacement letters.
 
-  </div>
+ </div>
 
-  </div>
+ </div>
 
-  `;
-
-
-  document.getElementById('status').textContent=
-  `Waiting for ${refillTiles.length} new letters...`;
+ `;
 
 
-  if(refillTiles.length){
+ document.getElementById("status").textContent=
+ `Waiting for ${refillTiles.length} new letters…`;
 
-    const first=
-    document.getElementById(
-      'l'+refillTiles[0]
-    );
 
-    first.focus();
+ if(refillTiles.length){
 
-    first.select();
+   const first=
+   document.getElementById(
+     "l"+refillTiles[0]
+   );
 
-  }
+   first.focus();
+   first.select();
+
+ }
 
 }
 
 
-/* -------------------------
+/* ===============================
    REFILL COMPLETE
-------------------------- */
+================================ */
 
 function finishRefill(){
 
-  refillTiles.forEach(i=>{
+ refillTiles.forEach(i=>{
 
-    document
-    .getElementById('tile'+i)
-    .classList.remove('refill');
+   document.getElementById("tile"+i)
+   .classList.remove("refill");
 
-  });
+ });
 
+ refillTiles=[];
 
-  refillTiles=[];
+ document.getElementById("chosen").innerHTML="";
 
+ document.getElementById("status").textContent=
+ "New board — solving…";
 
-  document.getElementById('chosen').innerHTML='';
-
-
-  document.getElementById('status').textContent=
-  "New board detected — solving...";
-
-
-  setTimeout(()=>{
-
-    solve();
-
-  },50);
+ setTimeout(solve,50);
 
 }
 
 
-/* -------------------------
-   RESET
-------------------------- */
+/* ===============================
+   CLEAR BOARD
+================================ */
 
-function resetSample(){
+function resetBoard(){
 
-  total=0;
+ total=0;
+ refillTiles=[];
 
-  refillTiles=[];
+ document.getElementById("total").textContent="0";
 
-  document.getElementById('total').textContent=0;
+ document.getElementById("chosen").innerHTML="";
+ document.getElementById("results").innerHTML="";
+ document.getElementById("progress").innerHTML="";
 
-  document.getElementById('chosen').innerHTML='';
+ render();
 
-  document.getElementById('results').innerHTML='';
-
-  document.getElementById('status').textContent='Ready.';
-
-  render();
+ document.getElementById("status").textContent=
+ "Ready.";
 
 }
 
 
-/* -------------------------
-   WORD LIST IMPORT
-------------------------- */
+/* ===============================
+   IMPORT BIGGER DICTIONARY
+================================ */
 
-document.getElementById('file').onchange=e=>{
+document.getElementById("dictFile").onchange=e=>{
 
-  const f=e.target.files[0];
+ const f=e.target.files[0];
 
-  if(!f) return;
+ if(!f) return;
 
-  const r=new FileReader();
+ const r=new FileReader();
 
-  r.onload=()=>{
+ r.onload=()=>{
 
-    dict=String(r.result)
-    .split(/\s+/);
+   dict=String(r.result)
+   .split(/\s+/);
 
-    document.getElementById('status').textContent=
-    `Imported ${dict.length.toLocaleString()} words.`;
+   document.getElementById("status").textContent=
+   `Imported ${dict.length.toLocaleString()} words.`;
 
-  };
+ };
 
-  r.readAsText(f);
+ r.readAsText(f);
 
 };
 
@@ -629,6 +807,5 @@ render();
 </script>
 
 </main>
-
 </body>
 </html>
