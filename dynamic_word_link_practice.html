@@ -1,0 +1,56 @@
+<!doctype html><html><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1">
+<title>Dynamic Word Link Practice</title>
+<style>
+*{box-sizing:border-box}body{margin:0;background:#07162f;color:#fff;font-family:-apple-system,system-ui,sans-serif}
+main{max-width:540px;margin:auto;padding:18px}h1{margin:4px 0}.muted{opacity:.7}
+.grid{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin:16px 0}
+.t{background:#f3f0e8;color:#111;border-radius:14px;padding:7px;text-align:center}
+.l{width:100%;border:0;background:transparent;text-align:center;font-size:34px;font-weight:850;text-transform:uppercase;outline:0}
+.p{width:38px;border:0;border-bottom:1px solid #777;background:transparent;text-align:center}
+button,label.btn{border:0;border-radius:12px;padding:12px 14px;margin:3px;font-weight:800;font-size:15px;background:#193d70;color:white;display:inline-block}
+.green{background:#20d48a!important;color:#032014!important}.panel{background:#0d2548;border-radius:13px;padding:13px;margin:13px 0}
+.word{display:flex;justify-content:space-between;gap:8px;padding:10px;border-bottom:1px solid #294466;cursor:pointer}
+.path{font-size:11px;opacity:.65}input[type=file]{display:none}.picked{background:#17365f}
+</style></head><body><main>
+<h1>Dynamic Word Link Practice</h1>
+<div class="muted">Analyze the current board, choose a word, then enter the newly-refilled board and solve again.</div>
+<div id="grid" class="grid"></div>
+<button class="green" onclick="solve()">SOLVE CURRENT BOARD</button>
+<button onclick="resetSample()">RESET</button>
+<label class="btn">IMPORT WORD LIST<input id="file" type="file" accept=".txt,text/plain"></label>
+<div class="panel">
+<b>Running practice score: <span id="total">0</span></b><br>
+<span class="muted" id="status">Starter dictionary loaded.</span>
+</div>
+<div id="chosen"></div><div id="results"></div>
+<script>
+let dict=["den", "dew", "don", "done", "down", "due", "duet", "dune", "end", "ewer", "net", "new", "newer", "newt", "nod", "not", "note", "now", "nut", "one", "our", "out", "outer", "owe", "owed", "own", "owner", "renew", "root", "rote", "route", "row", "rowed", "rower", "rue", "run", "rune", "rut", "ten", "toe", "ton", "tore", "torn", "tour", "tow", "tower", "town", "toy", "true", "tune", "tuner", "turn", "two", "under", "undo", "unto", "went", "were", "wet", "won", "wonder", "wont", "woo", "wood", "word", "wore", "worn", "wound", "wrote", "yore", "you", "your", "yow"], total=0;
+const sample=[['V',4],['N',1],['O',2],['D',2],['T',1],['Y',3],['O',2],['W',3],['N',1],['U',2],['O',2],['T',1],['E',1],['W',3],['E',1],['R',1]];
+function render(data=sample){let g=document.getElementById('grid');g.innerHTML='';
+ data.forEach((x,i)=>{let d=document.createElement('div');d.className='t';
+ d.innerHTML=`<input class="l" id="l${i}" maxlength="1" value="${x[0]}"><div>pts <input class="p" id="p${i}" type="number" min="0" max="20" value="${x[1]}"></div>`;
+ g.appendChild(d)})}
+function board(){let L=[],P=[];for(let i=0;i<16;i++){L.push((document.getElementById('l'+i).value||'').toLowerCase());P.push(+document.getElementById('p'+i).value||0)}return [L,P]}
+function solve(){
+ let [L,P]=board(); let ws=[...new Set(dict.map(x=>x.toLowerCase().trim()).filter(x=>/^[a-z]{3,16}$/.test(x)))];
+ let W=new Set(ws),pre=new Set();ws.forEach(w=>{for(let n=1;n<=w.length;n++)pre.add(w.slice(0,n))});
+ let F=new Map();
+ function dfs(i,s,path,score){s+=L[i];if(!pre.has(s))return;path=path.concat(i);score+=P[i];
+  if(W.has(s)&&(!F.has(s)||F.get(s).score<score))F.set(s,{score,path});
+  let r=(i/4)|0,c=i%4;for(let dr=-1;dr<=1;dr++)for(let dc=-1;dc<=1;dc++){if(!dr&&!dc)continue;
+   let rr=r+dr,cc=c+dc;if(rr<0||rr>3||cc<0||cc>3)continue;let j=rr*4+cc;if(!path.includes(j))dfs(j,s,path,score)}}
+ for(let i=0;i<16;i++)dfs(i,'',[],0);
+ let a=[...F].map(([word,v])=>({word,...v})).sort((a,b)=>b.score-a.score||b.word.length-a.word.length);
+ let R=document.getElementById('results');R.innerHTML=`<div class="panel"><b>${a.length} legal words found</b><div class="muted">Tap a word to record it, then update the 16 letters to match the refilled board.</div></div>`;
+ a.forEach(x=>{let d=document.createElement('div');d.className='word';d.innerHTML=`<span><b>${x.word.toUpperCase()}</b><div class="path">${x.path.map(i=>`R${((i/4)|0)+1}C${i%4+1}`).join(' → ')}</div></span><b>${x.score} pts</b>`;
+ d.onclick=()=>choose(x);R.appendChild(d)})
+ document.getElementById('status').textContent=`Solved with ${ws.length.toLocaleString()} dictionary words.`;
+}
+function choose(x){total+=x.score;document.getElementById('total').textContent=total;
+ document.getElementById('chosen').innerHTML=`<div class="panel"><b>Last play: ${x.word.toUpperCase()} (+${x.score})</b><div class="muted">Now copy the NEW refilled board into the tiles above and solve again.</div></div>`;
+ document.getElementById('results').innerHTML='';}
+function resetSample(){total=0;document.getElementById('total').textContent=0;document.getElementById('chosen').innerHTML='';document.getElementById('results').innerHTML='';render()}
+document.getElementById('file').onchange=e=>{let f=e.target.files[0];if(!f)return;let r=new FileReader();r.onload=()=>{dict=String(r.result).split(/\s+/);document.getElementById('status').textContent=`Imported ${dict.length.toLocaleString()} dictionary entries.`};r.readAsText(f)}
+render();
+</script></main></body></html>
